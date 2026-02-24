@@ -227,7 +227,7 @@ Make sure to set these in your deployment platform:
 - Employees can create customers (pending) and view approved customers; admins approve and manage all
 - Admin routes protected by middleware; role checked in middleware and server actions
 
-## Future Enhancements
+## More Features
 
 - [ ] Forgot password flow
 - [ ] Email setup (SMTP/transactional)

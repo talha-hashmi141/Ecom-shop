@@ -1,6 +1,6 @@
 # NimraCashAndCarry - E-commerce Application
 
-A modern, full-stack e-commerce application built with Next.js, Supabase, Tailwind CSS, and shadcn/ui.
+A modern, full-stack e-commerce application with admin dashboard, employee and customer management, inventory, and orders. Built with Next.js, Supabase, Tailwind CSS, and shadcn/ui.
 
 ## Features
 
@@ -10,12 +10,17 @@ A modern, full-stack e-commerce application built with Next.js, Supabase, Tailwi
 - 🏷️ **Category Pages** - View products by category
 - 🔍 **Product Details** - Detailed product information with images
 
-### Admin Features
+### Admin Dashboard
 - 🔐 **Admin Authentication** - Secure login with Supabase Auth
-- 📊 **Dashboard** - Overview of categories and products
-- 🏷️ **Category Management** - Full CRUD operations for categories
-- 📦 **Product Management** - Full CRUD operations for products
-- 🛡️ **Protected Routes** - Role-based access control
+- 📊 **Dashboard** - Overview of categories, products, and orders with pending count and quick actions
+- 🏷️ **Category Management** - Full CRUD for categories
+- 📦 **Product Management** - Full CRUD for products; image upload; stock and featured flags; product variations
+- 📋 **Order Management** - View and manage orders, status updates, order items
+- 👥 **Employee Management** - Add, edit, and manage employees (linked to auth)
+- 👤 **Customer Management** - Add, edit, and manage customers; approval workflow (pending/approved); employees can create customers for approval
+- 📤 **Image Upload** - Product images via Supabase Storage
+- 📉 **Inventory** - Product stock tracking with non-negative constraint
+- 🛡️ **Protected Routes** - Role-based access (admin vs employee); RLS on all tables
 
 ## Tech Stack
 
@@ -59,10 +64,9 @@ A modern, full-stack e-commerce application built with Next.js, Supabase, Tailwi
    ```
 
 4. **Set up the database**
-   - Go to your Supabase project dashboard
-   - Navigate to SQL Editor
-   - Run the SQL script from `supabase/schema.sql`
-   - This will create the necessary tables and policies
+   - Go to your Supabase project dashboard → SQL Editor
+   - Run the scripts in `supabase/sql/` in order: `schema.sql`, then `orders_schema.sql`, `employees_and_customers_schema.sql`, and any migrations (e.g. `customer_approval_migration.sql`, `add_product_variations.sql`) as needed
+   - This creates categories, products, orders, order_items, employees, customers, and RLS policies
 
 5. **Set up admin user**
    - In Supabase Dashboard, go to Authentication > Users
@@ -97,52 +101,60 @@ A modern, full-stack e-commerce application built with Next.js, Supabase, Tailwi
 ```
 ├── src/
 │   ├── app/                    # Next.js App Router pages
-│   │   ├── admin/              # Admin dashboard pages
+│   │   ├── admin/              # Admin: dashboard, categories, products, orders, employees, customers
 │   │   ├── category/           # Category pages
 │   │   ├── products/           # Product pages
 │   │   └── layout.tsx          # Root layout
 │   ├── components/             # React components
-│   │   ├── admin/              # Admin-specific components
+│   │   ├── admin/              # AdminSidebar, ProductTable, OrdersTable, EmployeesTable, CustomersTable, etc.
 │   │   └── ui/                 # shadcn/ui components
-│   ├── lib/                    # Utility functions
-│   │   ├── actions/            # Server actions
+│   ├── lib/                    # Utilities and server actions
+│   │   ├── actions/            # Server actions (products, orders, upload, etc.)
+│   │   ├── actions/admin/      # Admin actions (categories, products, orders, employees, customers)
 │   │   ├── supabase/           # Supabase clients
 │   │   └── utils.ts            # Utility functions
 │   └── types/                  # TypeScript types
 ├── supabase/
-│   └── schema.sql              # Database schema
-├── middleware.ts               # Next.js middleware for auth
+│   └── sql/                    # schema, orders, employees/customers, migrations
+├── middleware.ts               # Auth and role-based protection
 └── components.json             # shadcn/ui configuration
 ```
 
 ## Database Schema
 
-### Categories Table
-- `id` (UUID, Primary Key)
-- `name` (VARCHAR)
-- `slug` (VARCHAR, Unique)
-- `created_at` (TIMESTAMP)
+### Categories
+- `id`, `name`, `slug`, `created_at`
 
-### Products Table
-- `id` (UUID, Primary Key)
-- `name` (VARCHAR)
-- `slug` (VARCHAR, Unique)
-- `description` (TEXT)
-- `price` (DECIMAL)
-- `image_url` (TEXT)
-- `category_id` (UUID, Foreign Key)
-- `created_at` (TIMESTAMP)
+### Products
+- `id`, `name`, `slug`, `description`, `price`, `image_url`, `category_id`, `stock`, `is_featured`, `created_at`  
+- Product variations supported via `product_variations` table
+
+### Orders & Order Items
+- **orders**: `id`, `customer_name`, `customer_email`, `customer_phone`, `shipping_address`, `city`, `eir`, `vat_number`, `status`, `payment_method`, `total_amount`, `employee_id`, `customer_id`, `created_at`, `updated_at`
+- **order_items**: line items per order (product, quantity, price, VAT, variation)
+
+### Employees
+- Linked to Supabase Auth; `user_id`, `employee_id`, `name`, `email`, `is_active`, timestamps
+
+### Customers
+- `name`, `email`, `phone`, `shipping_address`, `city`, `eir`, `vat_number`, `notes`, `is_active`, `approval_status`, `created_by_employee_id`, timestamps
 
 ## Admin Routes
 
-- `/admin` - Dashboard
+- `/admin` - Dashboard (categories, products, orders counts; quick actions)
 - `/admin/login` - Admin login
 - `/admin/categories` - Manage categories
 - `/admin/categories/new` - Create category
 - `/admin/categories/[id]/edit` - Edit category
-- `/admin/products` - Manage products
+- `/admin/products` - Manage products (with stock, featured, images, variations)
 - `/admin/products/new` - Create product
 - `/admin/products/[id]/edit` - Edit product
+- `/admin/orders` - View and manage orders (with items)
+- `/admin/employees` - Manage employees
+- `/admin/employees/new` - Add employee
+- `/admin/customers` - Manage customers (approved and pending)
+- `/admin/customers/new` - Add customer
+- `/admin/customers/[id]/edit` - Edit customer
 
 ## Public Routes
 
@@ -153,9 +165,9 @@ A modern, full-stack e-commerce application built with Next.js, Supabase, Tailwi
 
 ## Features in Detail
 
-### Authentication
-- Uses Supabase Auth for authentication
-- Role-based access control (admin role required)
+### Authentication & Roles
+- Supabase Auth for admin and employee login
+- Role-based access: admin (full access) and employee (orders, approved customers, create pending customers)
 - Protected admin routes via middleware
 - Session management with server and client components
 
@@ -210,22 +222,20 @@ Make sure to set these in your deployment platform:
 
 ## Security Notes
 
-- Row Level Security (RLS) is enabled on all tables
-- Public read access for categories and products
-- Admin-only write access (enforced via RLS policies)
-- Admin routes are protected by middleware
-- User role is checked in both middleware and server actions
+- Row Level Security (RLS) on all tables (categories, products, orders, order_items, employees, customers)
+- Public read for categories and products; admin/employee policies for orders, employees, and customers
+- Employees can create customers (pending) and view approved customers; admins approve and manage all
+- Admin routes protected by middleware; role checked in middleware and server actions
 
 ## Future Enhancements
 
-- [ ] Image upload to Supabase Storage
-- [ ] Shopping cart functionality
-- [ ] User authentication for customers
-- [ ] Order management
+- [ ] Forgot password flow
+- [ ] Email setup (SMTP/transactional)
+- [ ] Shopping cart and checkout for public
 - [ ] Payment integration
-- [ ] Search functionality
-- [ ] Product filtering and sorting
-- [ ] Pagination
+- [ ] Search and advanced filtering
+- [ ] Pagination on list pages
+- [ ] Responsiveness improvements
 
 ## License
 
@@ -234,13 +244,4 @@ This project is open source and available under the MIT License.
 ## Support
 
 For issues and questions, please open an issue on GitHub.
-
-
-
-++++++++ things to do ++++++++
-forgot password not working 
-email setup not working 
-order items is not showing up 
-responsive ness 
-emplyees can create new customers 
 
